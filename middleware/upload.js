@@ -1,64 +1,87 @@
-const multer = require('multer');
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const multer = require("multer");
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+let cloudinary, CloudinaryStorage;
+let cloudinaryAvailable = false;
 
-// Storage for profile images
-const profileStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'tahseen-portfolio/profile',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 800, height: 800, crop: 'fill', gravity: 'face' }],
-  },
-});
+try {
+  cloudinary = require("cloudinary").v2;
+  const pkg = require("multer-storage-cloudinary");
+  CloudinaryStorage = pkg.CloudinaryStorage;
 
-// Storage for project images
-const projectStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'tahseen-portfolio/projects',
-    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-    transformation: [{ width: 1200, height: 630, crop: 'fill' }],
-  },
-});
+  if (process.env.CLOUDINARY_CLOUD_NAME) {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+    cloudinaryAvailable = true;
+  }
+} catch (e) {
+  console.log("Cloudinary not available");
+}
 
-// File filter — images only
+const memoryStorage = multer.memoryStorage();
+
 const imageFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith('image/')) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only image files are allowed'), false);
-  }
+  if (file.mimetype.startsWith("image/")) cb(null, true);
+  else cb(new Error("Only image files are allowed"), false);
 };
 
-// File filter — PDFs only
 const pdfFilter = (req, file, cb) => {
-  if (file.mimetype === 'application/pdf') {
-    cb(null, true);
-  } else {
-    cb(new Error('Only PDF files are allowed'), false);
-  }
+  if (file.mimetype === "application/pdf") cb(null, true);
+  else cb(new Error("Only PDF files are allowed"), false);
 };
 
-// CV storage (Cloudinary raw)
-const cvStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'tahseen-portfolio/cv',
-    allowed_formats: ['pdf'],
-    resource_type: 'raw',
-  },
+const profileStorage = cloudinaryAvailable
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "tahseen-portfolio/profile",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      },
+    })
+  : memoryStorage;
+
+const projectStorage = cloudinaryAvailable
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "tahseen-portfolio/projects",
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+      },
+    })
+  : memoryStorage;
+
+const cvStorage = cloudinaryAvailable
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "tahseen-portfolio/cv",
+        allowed_formats: ["pdf"],
+        resource_type: "raw",
+      },
+    })
+  : memoryStorage;
+
+const uploadProfileImage = multer({
+  storage: profileStorage,
+  fileFilter: imageFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+const uploadProjectImage = multer({
+  storage: projectStorage,
+  fileFilter: imageFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+const uploadCV = multer({
+  storage: cvStorage,
+  fileFilter: pdfFilter,
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-const uploadProfileImage = multer({ storage: profileStorage, fileFilter: imageFilter, limits: { fileSize: 5 * 1024 * 1024 } });
-const uploadProjectImage = multer({ storage: projectStorage, fileFilter: imageFilter, limits: { fileSize: 5 * 1024 * 1024 } });
-const uploadCV           = multer({ storage: cvStorage,      fileFilter: pdfFilter,   limits: { fileSize: 10 * 1024 * 1024 } });
-
-module.exports = { cloudinary, uploadProfileImage, uploadProjectImage, uploadCV };
+module.exports = {
+  cloudinary,
+  uploadProfileImage,
+  uploadProjectImage,
+  uploadCV,
+};
